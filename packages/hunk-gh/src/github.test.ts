@@ -3,7 +3,10 @@ import {
   fetchGitHubCommitDiff,
   fetchGitHubCompareDiff,
   fetchGitHubPullRequestDiff,
+  fetchGitHubPullRequestMetadata,
+  findOpenPullRequestForBranch,
   findOpenPullRequestForCommit,
+  parseGitHubPullRequestMetadata,
 } from "./github";
 import type { GitHubFetch } from "./types";
 
@@ -41,6 +44,32 @@ describe("GitHub pull-request discovery", () => {
     expect(url.searchParams.get("per_page")).toBe("100");
     expect(requestInit?.redirect).toBe("manual");
     expect(new Headers(requestInit?.headers).get("accept")).toBe("application/vnd.github+json");
+  });
+
+  test("falls back to the pushed branch tip when local HEAD is not on GitHub", async () => {
+    const upstreamSha = "b".repeat(40);
+    const requests: string[] = [];
+    await expect(
+      findOpenPullRequestForBranch(
+        repository,
+        { branch: "feature/topic", sha, upstreamSha },
+        signal(),
+        {},
+        (async (url) => {
+          requests.push(String(url));
+          if (requests.length === 1) return new Response("", { status: 404 });
+          return Response.json([
+            {
+              number: 123,
+              state: "open",
+              base: { repo: { full_name: "modem-dev/hunk" } },
+            },
+          ]);
+        }) as GitHubFetch,
+      ),
+    ).resolves.toEqual({ owner: "modem-dev", repo: "hunk", number: "123" });
+    expect(requests[0]).toContain(`/commits/${sha}/pulls`);
+    expect(requests[1]).toContain(`/commits/${upstreamSha}/pulls`);
   });
 
   test("filters closed PRs and preserves exact-one open semantics", async () => {
@@ -201,6 +230,61 @@ describe("GitHub pull-request discovery", () => {
         throw new Error("abort internals");
       }) as GitHubFetch),
     ).rejects.toThrow("cancelled");
+  });
+});
+
+describe("GitHub pull-request metadata", () => {
+  const target = { owner: "modem-dev", repo: "hunk", number: "123" };
+  const metadata = {
+    title: "Describe delegated reviews",
+    html_url: "https://github.com/modem-dev/hunk/pull/123",
+    user: { login: "octocat" },
+    state: "open",
+    draft: false,
+    merged: false,
+    base: { ref: "main" },
+    head: { ref: "feature/review-info" },
+  };
+
+  test("fetches and validates the exact review descriptor fields", async () => {
+    let requestInit: RequestInit | undefined;
+    const review = await fetchGitHubPullRequestMetadata(
+      target,
+      signal(),
+      { GH_TOKEN: "preferred" },
+      (async (_url, init) => {
+        requestInit = init;
+        return Response.json(metadata);
+      }) as GitHubFetch,
+    );
+    expect(new Headers(requestInit?.headers).get("accept")).toBe("application/vnd.github+json");
+    expect(new Headers(requestInit?.headers).get("authorization")).toBe("Bearer preferred");
+    expect(requestInit?.redirect).toBe("manual");
+    expect(review).toEqual({
+      kind: "change-request",
+      provider: "GitHub",
+      title: "Describe delegated reviews",
+      url: "https://github.com/modem-dev/hunk/pull/123",
+      id: "#123",
+      repository: "modem-dev/hunk",
+      author: "octocat",
+      base: "main",
+      head: "feature/review-info",
+      state: "open",
+      draft: false,
+    });
+  });
+
+  test("rejects terminal controls and PR URLs that do not match the target", () => {
+    expect(() =>
+      parseGitHubPullRequestMetadata({ ...metadata, title: "forged\u001b[2Jtitle" }, target),
+    ).toThrow("malformed pull-request metadata");
+    expect(() =>
+      parseGitHubPullRequestMetadata(
+        { ...metadata, html_url: "https://github.com/attacker/repo/pull/123" },
+        target,
+      ),
+    ).toThrow("malformed pull-request metadata");
   });
 });
 

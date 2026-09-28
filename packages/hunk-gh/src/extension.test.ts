@@ -10,8 +10,7 @@ import type {
   ExtensionEventHandler,
   HunkExtensionAPI,
 } from "hunkdiff/extension";
-import extensionEntry, { parseGitHubRepository } from "./index";
-import { createGitHubPrExtension } from "./extension";
+import { createGitHubPrExtension, parseGitHubRepository } from "./index";
 import type { GitHubFetch } from "./types";
 
 const temporaryDirectories: string[] = [];
@@ -26,6 +25,31 @@ function createTestDirectory() {
   const directory = mkdtempSync(join(tmpdir(), "hunk-gh-extension-test-"));
   temporaryDirectories.push(directory);
   return directory;
+}
+
+/** Builds the exact GitHub metadata fields shown in delegated review chrome. */
+function createTestPullRequestMetadata(number = "123", owner = "modem-dev", repo = "hunk") {
+  return {
+    title: "Describe delegated reviews",
+    html_url: `https://github.com/${owner}/${repo}/pull/${number}`,
+    user: { login: "octocat" },
+    state: "open",
+    draft: false,
+    merged: false,
+    base: { ref: "main" },
+    head: { ref: "feature/review-info" },
+  };
+}
+
+/** Mocks the JSON and diff representations served by one GitHub PR endpoint. */
+function createTestPullRequestFetch(patch: string): GitHubFetch {
+  return (async (url, init) => {
+    if (new Headers(init?.headers).get("accept") === "application/vnd.github+json") {
+      const parts = new URL(String(url)).pathname.split("/");
+      return Response.json(createTestPullRequestMetadata(parts[5], parts[2], parts[3]));
+    }
+    return new Response(patch);
+  }) as GitHubFetch;
 }
 
 /** Captures the CLI command and shutdown handler registered by one factory. */
@@ -77,7 +101,7 @@ function createTestContext(signal = new AbortController().signal) {
 
 describe("GitHub command dispatch", () => {
   test("loads through the tiny root entry point and preserves named exports", () => {
-    expect(extensionEntry).toBeTypeOf("function");
+    expect(createGitHubPrExtension).toBeTypeOf("function");
     expect(parseGitHubRepository("modem-dev/hunk")).toEqual({
       owner: "modem-dev",
       repo: "hunk",
@@ -120,12 +144,15 @@ describe("GitHub command dispatch", () => {
     expect(fetches).toBe(0);
   });
 
-  test("rejects unknown GitHub subcommands", async () => {
+  test("rejects unknown GitHub subcommands without echoing terminal controls", async () => {
     const registration = registerTestExtension();
     if (!registration.handler) throw new Error("Expected command registration.");
     await expect(registration.handler(["issue", "1"], createTestContext().context)).rejects.toThrow(
       "Unknown GitHub command",
     );
+    await expect(
+      registration.handler(["forged\u001b[2Jcommand"], createTestContext().context),
+    ).rejects.toThrow("cannot contain control characters");
   });
 
   test.each([
@@ -167,8 +194,13 @@ describe("GitHub command dispatch", () => {
       createGitHubPrExtension({
         temporaryRoot,
         env: {},
-        fetchImpl: (async (url) => {
+        fetchImpl: (async (url, init) => {
           requestUrl = String(url);
+          const accept = new Headers(init?.headers).get("accept");
+          if (accept === "application/vnd.github+json" && requestUrl.includes("/pulls/")) {
+            const number = requestUrl.split("/").at(-1)!;
+            return Response.json(createTestPullRequestMetadata(number));
+          }
           return new Response(patch, { status: 200 });
         }) as GitHubFetch,
         resolveOrigin: async () => "git@github.com:modem-dev/hunk.git",
@@ -184,6 +216,15 @@ describe("GitHub command dispatch", () => {
     expect(result.argv[0]).toBe("patch");
     expect(result.argv[1]).toContain(scenario.expectedFilename);
     expect(result.argv.slice(2)).toEqual(["--pager"]);
+    if (scenario.args[0] === "pr") {
+      expect(result.review).toMatchObject({
+        kind: "change-request",
+        title: "Describe delegated reviews",
+        repository: "modem-dev/hunk",
+      });
+    } else {
+      expect(result.review).toBeUndefined();
+    }
     expect(readFileSync(result.argv[1]!, "utf8")).toBe(patch);
     expect(output.stdout).toEqual([]);
     expect(output.stdinReads()).toBe(0);
@@ -203,19 +244,21 @@ describe("GitHub branch PR dispatch", () => {
         env: {},
         resolveOrigin: async () => "git@github.com:contributor/hunk.git",
         resolveCheckout: async () => ({ branch: "feature/topic", sha: "a".repeat(40) }),
-        fetchImpl: (async (url) => {
+        fetchImpl: (async (url, init) => {
           requests.push(String(url));
-          return requests.length === 1
-            ? new Response(
-                JSON.stringify([
-                  {
-                    number: 321,
-                    state: "open",
-                    base: { repo: { full_name: "modem-dev/hunk" } },
-                  },
-                ]),
-              )
-            : new Response("diff --git a/a b/a\n");
+          if (String(url).includes("/commits/")) {
+            return Response.json([
+              {
+                number: 321,
+                state: "open",
+                base: { repo: { full_name: "modem-dev/hunk" } },
+              },
+            ]);
+          }
+          if (new Headers(init?.headers).get("accept") === "application/vnd.github+json") {
+            return Response.json(createTestPullRequestMetadata("321"));
+          }
+          return new Response("diff --git a/a b/a\n");
         }) as GitHubFetch,
       }),
     );
@@ -227,6 +270,12 @@ describe("GitHub branch PR dispatch", () => {
     if (result.kind !== "delegate") throw new Error("Expected patch delegation.");
     expect(requests[0]).toContain(`/repos/contributor/hunk/commits/${"a".repeat(40)}/pulls`);
     expect(requests[1]).toContain("/repos/modem-dev/hunk/pulls/321");
+    expect(requests[2]).toContain("/repos/modem-dev/hunk/pulls/321");
+    expect(result.review).toMatchObject({
+      kind: "change-request",
+      id: "#321",
+      repository: "modem-dev/hunk",
+    });
     expect(output.stderr.join("")).toContain("pull request modem-dev/hunk#321");
     await registration.shutdown({}, {} as never);
   });
@@ -240,7 +289,7 @@ describe("GitHub extension temporary patch lifecycle", () => {
       createGitHubPrExtension({
         temporaryRoot,
         env: {},
-        fetchImpl: (async () => new Response("diff --git a/a b/a\n")) as GitHubFetch,
+        fetchImpl: createTestPullRequestFetch("diff --git a/a b/a\n"),
       }),
     );
     if (!registration.handler) throw new Error("Expected command registration.");
@@ -261,7 +310,7 @@ describe("GitHub extension temporary patch lifecycle", () => {
     const extension = createGitHubPrExtension({
       temporaryRoot,
       env: {},
-      fetchImpl: (async () => new Response("diff --git a/a b/a\n")) as GitHubFetch,
+      fetchImpl: createTestPullRequestFetch("diff --git a/a b/a\n"),
     });
     const first = registerTestExtension(extension);
     if (!first.handler || !first.shutdown) throw new Error("Expected first registration.");

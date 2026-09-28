@@ -3,12 +3,15 @@ import {
   HunkExtensionUserError,
   type ExtensionCliCommandHandler,
   type ExtensionFactory,
+  type ExtensionReviewDescriptor,
 } from "hunkdiff/extension";
+import { assertSafeArgument } from "./errors";
 import {
   fetchGitHubCommitDiff,
   fetchGitHubCompareDiff,
   fetchGitHubPullRequestDiff,
-  findOpenPullRequestForCommit,
+  fetchGitHubPullRequestMetadata,
+  findOpenPullRequestForBranch,
 } from "./github";
 import { GITHUB_COMMIT_HELP, GITHUB_COMPARE_HELP, GITHUB_HELP, GITHUB_PR_HELP } from "./help";
 import {
@@ -29,6 +32,7 @@ interface PreparedDiff {
   bytes: Uint8Array;
   filename: string;
   patchArgs: readonly string[];
+  review?: ExtensionReviewDescriptor;
 }
 
 /** Resolves and fetches one PR command into a patch-ready diff. */
@@ -49,10 +53,9 @@ async function preparePullRequest(
           runtime.resolveOrigin,
         );
         const checkout = await runtime.resolveCheckout(ctx.cwd, ctx.signal);
-        return findOpenPullRequestForCommit(
+        return findOpenPullRequestForBranch(
           originRepository,
-          checkout.branch,
-          checkout.sha,
+          checkout,
           ctx.signal,
           runtime.env,
           runtime.fetchImpl,
@@ -61,10 +64,17 @@ async function preparePullRequest(
   await ctx.stderr.write(
     `Fetching GitHub pull request ${target.owner}/${target.repo}#${target.number}…\n`,
   );
+  const review = await fetchGitHubPullRequestMetadata(
+    target,
+    ctx.signal,
+    runtime.env,
+    runtime.fetchImpl,
+  );
   return {
     bytes: await fetchGitHubPullRequestDiff(target, ctx.signal, runtime.env, runtime.fetchImpl),
     filename: `${target.repo}-pr-${target.number}.diff`,
     patchArgs: invocation.patchArgs,
+    review,
   };
 }
 
@@ -138,7 +148,7 @@ export function createGitHubPrExtension(
 ): ExtensionFactory {
   const runtime: GitHubExtensionRuntime = {
     fetchImpl: overrides.fetchImpl ?? fetch,
-    env: overrides.env ?? process.env,
+    env: overrides.env ?? {},
     resolveOrigin: overrides.resolveOrigin ?? readGitOrigin,
     resolveCheckout: overrides.resolveCheckout ?? readGitCheckout,
     temporaryRoot: overrides.temporaryRoot ?? tmpdir(),
@@ -163,6 +173,7 @@ export function createGitHubPrExtension(
       } else if (args[0] === "compare") {
         prepared = await prepareCompare(args.slice(1), ctx, runtime);
       } else {
+        assertSafeArgument(args[0]!, "GitHub command");
         throw new HunkExtensionUserError(`Unknown GitHub command: ${args[0]}`, {
           suggestions: ["Run `hunk gh --help` to list available commands."],
         });
@@ -186,7 +197,11 @@ export function createGitHubPrExtension(
         await patches.remove(patchPath);
         throw new HunkExtensionUserError("GitHub diff loading was cancelled.");
       }
-      return { kind: "delegate", argv: ["patch", patchPath, ...prepared.patchArgs] };
+      return {
+        kind: "delegate",
+        argv: ["patch", patchPath, ...prepared.patchArgs],
+        ...(prepared.review === undefined ? {} : { review: prepared.review }),
+      };
     };
 
     hunk.registerCliCommand(
@@ -205,5 +220,3 @@ export function createGitHubPrExtension(
     });
   };
 }
-
-export default createGitHubPrExtension();

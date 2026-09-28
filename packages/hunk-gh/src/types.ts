@@ -23,6 +23,7 @@ export interface ResolvedGitHubPullRequest extends GitHubRepository {
 export interface GitCheckoutIdentity {
   branch: string;
   sha: string;
+  upstreamSha?: string;
 }
 
 export interface GitHubCommitLocator {

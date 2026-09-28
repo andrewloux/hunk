@@ -147,14 +147,30 @@ export async function readGitHeadSha(cwd: string, signal: AbortSignal): Promise<
   }
 }
 
-/** Reads the branch label and exact HEAD needed for fork-aware PR discovery. */
+/** Reads the optional pushed upstream commit without requiring every branch to track one. */
+async function readGitUpstreamSha(cwd: string, signal: AbortSignal): Promise<string | undefined> {
+  try {
+    const sha = await executeGit(cwd, ["rev-parse", "--verify", "@{upstream}"], signal);
+    return /^[0-9a-f]{40,64}$/i.test(sha) ? sha.toLowerCase() : undefined;
+  } catch (error) {
+    if (signal.aborted) throw new HunkExtensionUserError("GitHub PR discovery was cancelled.");
+    const processError = error as GitProcessError | null;
+    if (processError?.code === "ENOENT") throw classifyGitLookupFailure(error, "HEAD");
+    return undefined;
+  }
+}
+
+/** Reads the branch, local HEAD, and optional pushed tip needed for fork-aware PR discovery. */
 export async function readGitCheckout(
   cwd: string,
   signal: AbortSignal,
 ): Promise<GitCheckoutIdentity> {
   const branch = await readGitBranch(cwd, signal);
-  const sha = await readGitHeadSha(cwd, signal);
-  return { branch, sha };
+  const [sha, upstreamSha] = await Promise.all([
+    readGitHeadSha(cwd, signal),
+    readGitUpstreamSha(cwd, signal),
+  ]);
+  return { branch, sha, ...(upstreamSha === undefined ? {} : { upstreamSha }) };
 }
 
 /** Resolves an explicit repository or infers one from the local GitHub origin. */

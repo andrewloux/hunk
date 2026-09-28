@@ -1,4 +1,4 @@
-import ghExtension from "@hunk/gh";
+import { createGitHubPrExtension } from "@hunk/gh";
 import type { ExtensionFactory } from "../../../extension-api/types";
 import { HUNK_VENDOR_EXTENSION_ID } from "../../extensionIds";
 import { createExtensionNotificationHub, type ExtensionNotificationHub } from "../../notifications";
@@ -24,7 +24,7 @@ export const BUNDLED_CORE_EXTENSION_DEFINITIONS: readonly BundledCoreExtensionDe
     selectionId: "hunk.gh",
     registrationId: HUNK_VENDOR_EXTENSION_ID,
     sourcePath: "hunk:bundled/gh",
-    factory: ghExtension,
+    factory: createGitHubPrExtension({ env: process.env }),
     commands: ["gh"],
   },
 ];

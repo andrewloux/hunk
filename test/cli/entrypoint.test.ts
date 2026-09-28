@@ -441,7 +441,7 @@ describe("CLI entrypoint contracts", () => {
         'Extension "hunk.gh" is disabled.',
       );
       expect(Buffer.from(disabled.stderr).toString("utf8")).toContain(
-        "hunk --enable-extension hunk.gh gh --help",
+        "adding `--enable-extension hunk.gh` before `gh`.",
       );
 
       const enabled = Bun.spawnSync(

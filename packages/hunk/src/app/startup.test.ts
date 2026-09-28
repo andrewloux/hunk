@@ -334,7 +334,7 @@ describe("startup planning", () => {
     await expect(plan).rejects.toMatchObject({
       message: 'Extension "hunk.gh" is disabled.',
       suggestions: [
-        "Enable it for this run: hunk --enable-extension hunk.gh gh pr 123",
+        "Enable it for this run by adding `--enable-extension hunk.gh` before `gh`.",
         "Enable it permanently by removing hunk.gh from [extensions].disabled.",
       ],
     });

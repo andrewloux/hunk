@@ -284,7 +284,7 @@ export async function prepareStartupPlan(
           });
           if (!decision.enabled) {
             throw new HunkUserError(`Extension "${bundledDefinition.selectionId}" is disabled.`, [
-              `Enable it for this run: hunk --enable-extension ${bundledDefinition.selectionId} ${invocation.commandName} ${invocation.args.join(" ")}`.trimEnd(),
+              `Enable it for this run by adding \`--enable-extension ${bundledDefinition.selectionId}\` before \`${invocation.commandName}\`.`,
               `Enable it permanently by removing ${bundledDefinition.selectionId} from [extensions].disabled.`,
             ]);
           }

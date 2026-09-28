@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import ghExtension from "@hunk/gh";
+import { createGitHubPrExtension } from "@hunk/gh";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -45,6 +45,6 @@ describe("@hunk/gh package boundary", () => {
   });
 
   test("loads its extension entrypoint through the workspace", () => {
-    expect(typeof ghExtension).toBe("function");
+    expect(typeof createGitHubPrExtension).toBe("function");
   });
 });

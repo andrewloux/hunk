@@ -3,4 +3,4 @@ export * from "./help";
 export * from "./parsing";
 export * from "./repository";
 export * from "./types";
-export { createGitHubPrExtension, default } from "./extension";
+export { createGitHubPrExtension } from "./extension";

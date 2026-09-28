@@ -1,6 +1,14 @@
-import { HunkExtensionUserError } from "hunkdiff/extension";
+import {
+  HunkExtensionUserError,
+  type ExtensionChangeRequestReviewDescriptor,
+} from "hunkdiff/extension";
 import { parseGitHubRepository } from "./parsing";
-import type { GitHubFetch, GitHubRepository, ResolvedGitHubPullRequest } from "./types";
+import type {
+  GitCheckoutIdentity,
+  GitHubFetch,
+  GitHubRepository,
+  ResolvedGitHubPullRequest,
+} from "./types";
 
 const GITHUB_API_ORIGIN = "https://api.github.com";
 const MAX_DIFF_BYTES = 64 * 1024 * 1024;
@@ -170,7 +178,7 @@ export async function findOpenPullRequestForCommit(
   branch: string,
   sha: string,
   signal: AbortSignal,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = {},
   fetchImpl: GitHubFetch = fetch,
 ): Promise<ResolvedGitHubPullRequest> {
   if (!/^[0-9a-f]{40,64}$/i.test(sha)) {
@@ -278,11 +286,157 @@ export async function findOpenPullRequestForCommit(
   return { owner, repo, number };
 }
 
+/** Finds a branch PR even when local HEAD is ahead of its pushed upstream tip. */
+export async function findOpenPullRequestForBranch(
+  originRepository: GitHubRepository,
+  checkout: GitCheckoutIdentity,
+  signal: AbortSignal,
+  env: NodeJS.ProcessEnv = {},
+  fetchImpl: GitHubFetch = fetch,
+): Promise<ResolvedGitHubPullRequest> {
+  try {
+    return await findOpenPullRequestForCommit(
+      originRepository,
+      checkout.branch,
+      checkout.sha,
+      signal,
+      env,
+      fetchImpl,
+    );
+  } catch (error) {
+    const upstreamSha = checkout.upstreamSha;
+    const canRetryPushedTip =
+      upstreamSha !== undefined &&
+      upstreamSha !== checkout.sha &&
+      error instanceof HunkExtensionUserError &&
+      (error.message.startsWith("No accessible open pull request") ||
+        error.message.startsWith("GitHub could not find an accessible commit"));
+    if (!canRetryPushedTip) throw error;
+    return findOpenPullRequestForCommit(
+      originRepository,
+      checkout.branch,
+      upstreamSha,
+      signal,
+      env,
+      fetchImpl,
+    );
+  }
+}
+
+/** Parses the validated GitHub fields shown in Hunk's delegated review pane. */
+export function parseGitHubPullRequestMetadata(
+  value: unknown,
+  target: ResolvedGitHubPullRequest,
+): ExtensionChangeRequestReviewDescriptor {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+  }
+  const candidate = value as Record<string, unknown>;
+  const readString = (container: Record<string, unknown>, field: string, maximumBytes: number) => {
+    const fieldValue = container[field];
+    if (
+      typeof fieldValue !== "string" ||
+      fieldValue.length === 0 ||
+      /[\u0000-\u001f\u007f-\u009f]/u.test(fieldValue) ||
+      new TextEncoder().encode(fieldValue).byteLength > maximumBytes
+    ) {
+      throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+    }
+    return fieldValue;
+  };
+  const readObject = (field: string) => {
+    const fieldValue = candidate[field];
+    if (typeof fieldValue !== "object" || fieldValue === null || Array.isArray(fieldValue)) {
+      throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+    }
+    return fieldValue as Record<string, unknown>;
+  };
+
+  const title = readString(candidate, "title", 2 * 1024);
+  const pageUrl = readString(candidate, "html_url", 2 * 1024);
+  const author = readString(readObject("user"), "login", 512);
+  const base = readString(readObject("base"), "ref", 512);
+  const head = readString(readObject("head"), "ref", 512);
+  const state = candidate.state;
+  const draft = candidate.draft;
+  if (
+    (state !== "open" && state !== "closed") ||
+    (draft !== undefined && typeof draft !== "boolean") ||
+    (candidate.merged !== undefined && typeof candidate.merged !== "boolean")
+  ) {
+    throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(pageUrl);
+  } catch {
+    throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+  }
+  const expectedPath = `/${target.owner}/${target.repo}/pull/${target.number}`.toLowerCase();
+  if (
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.hostname.toLowerCase() !== "github.com" ||
+    parsedUrl.port ||
+    parsedUrl.username ||
+    parsedUrl.password ||
+    parsedUrl.search ||
+    parsedUrl.hash ||
+    parsedUrl.pathname.toLowerCase() !== expectedPath
+  ) {
+    throw new HunkExtensionUserError("GitHub returned malformed pull-request metadata.");
+  }
+
+  return {
+    kind: "change-request",
+    provider: "GitHub",
+    title,
+    url: pageUrl,
+    id: `#${target.number}`,
+    repository: `${target.owner}/${target.repo}`,
+    author,
+    base,
+    head,
+    state: candidate.merged === true ? "merged" : state,
+    ...(typeof draft === "boolean" ? { draft } : {}),
+  };
+}
+
+/** Fetches bounded GitHub pull-request metadata for delegated review chrome. */
+export async function fetchGitHubPullRequestMetadata(
+  target: ResolvedGitHubPullRequest,
+  signal: AbortSignal,
+  env: NodeJS.ProcessEnv = {},
+  fetchImpl: GitHubFetch = fetch,
+): Promise<ExtensionChangeRequestReviewDescriptor> {
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `${GITHUB_API_ORIGIN}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}/pulls/${target.number}`,
+      {
+        headers: githubHeaders(env, "hunk-gh-extension", "application/vnd.github+json"),
+        redirect: "manual",
+        signal,
+      },
+    );
+  } catch (error) {
+    if (error instanceof HunkExtensionUserError) throw error;
+    if (signal.aborted)
+      throw new HunkExtensionUserError("GitHub pull-request loading was cancelled.");
+    throw new HunkExtensionUserError(
+      "GitHub could not be reached while loading pull-request metadata.",
+      { suggestions: ["Check network access and retry."] },
+    );
+  }
+  if (!response.ok) throw pullRequestResponseError(response, target);
+  return parseGitHubPullRequestMetadata(await readPullRequestMetadata(response, signal), target);
+}
+
 /** Fetches one GitHub pull-request diff without invoking the gh CLI. */
 export async function fetchGitHubPullRequestDiff(
   target: ResolvedGitHubPullRequest,
   signal: AbortSignal,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = {},
   fetchImpl: GitHubFetch = fetch,
 ): Promise<Uint8Array> {
   let response: Response;
@@ -315,7 +469,7 @@ export async function fetchGitHubCommitDiff(
   repository: GitHubRepository,
   sha: string,
   signal: AbortSignal,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = {},
   fetchImpl: GitHubFetch = fetch,
 ): Promise<Uint8Array> {
   const name = `${repository.owner}/${repository.repo}@${sha}`;
@@ -350,7 +504,7 @@ export async function fetchGitHubCompareDiff(
   base: string,
   head: string,
   signal: AbortSignal,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = {},
   fetchImpl: GitHubFetch = fetch,
 ): Promise<Uint8Array> {
   const name = `${repository.owner}/${repository.repo}:${base}...${head}`;

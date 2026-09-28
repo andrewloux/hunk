@@ -97,6 +97,38 @@ describe("GitHub repository resolution", () => {
     }
   });
 
+  test("retains the pushed upstream tip when local HEAD is ahead", async () => {
+    const root = mkdtempSync(join(tmpdir(), "hunk-gh-upstream-test-"));
+    const remote = join(root, "remote.git");
+    const checkout = join(root, "checkout");
+    try {
+      execFileSync("git", ["init", "--bare", remote]);
+      execFileSync("git", ["init", "-b", "topic", checkout]);
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: checkout });
+      execFileSync("git", ["config", "user.name", "Test"], { cwd: checkout });
+      execFileSync("git", ["commit", "--allow-empty", "-m", "pushed"], { cwd: checkout });
+      execFileSync("git", ["remote", "add", "origin", remote], { cwd: checkout });
+      execFileSync("git", ["push", "-u", "origin", "topic"], { cwd: checkout });
+      const upstreamSha = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: checkout,
+        encoding: "utf8",
+      }).trim();
+      execFileSync("git", ["commit", "--allow-empty", "-m", "local"], { cwd: checkout });
+      const sha = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: checkout,
+        encoding: "utf8",
+      }).trim();
+
+      await expect(readGitCheckout(checkout, new AbortController().signal)).resolves.toEqual({
+        branch: "topic",
+        sha,
+        upstreamSha,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("distinguishes missing Git, cancellation, and other lookup failures", async () => {
     expect(classifyGitLookupFailure({ code: "ENOENT" }, "branch").message).toContain(
       "Git is unavailable",
