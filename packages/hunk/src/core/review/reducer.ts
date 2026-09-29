@@ -197,6 +197,16 @@ export function reduceReviewState(state: ReviewState, action: ReviewAction): Rev
       return action.notes.length === 0
         ? state
         : { ...state, liveNotes: [...state.liveNotes, ...action.notes] };
+    case "notes/update-live": {
+      const index = state.liveNotes.findIndex((entry) => entry.note.id === action.noteId);
+      if (index < 0) {
+        return state;
+      }
+      const liveNotes = [...state.liveNotes];
+      const entry = liveNotes[index]!;
+      liveNotes[index] = { ...entry, note: { ...entry.note, ...action.edit } };
+      return { ...state, liveNotes };
+    }
     case "notes/remove-live": {
       const liveNotes = withoutNote(state.liveNotes, action.noteId);
       return liveNotes === state.liveNotes

@@ -143,6 +143,14 @@ export interface RemoveCommentToolInput extends SessionTargetInput {
   commentId: string;
 }
 
+/** Replace the text of one live comment in place. Each field given replaces that field. */
+export interface EditCommentToolInput extends SessionTargetInput {
+  commentId: string;
+  summary?: string;
+  rationale?: string;
+  author?: string;
+}
+
 export interface ClearCommentsToolInput extends SessionTargetInput {
   filePath?: string;
   includeUser?: boolean;
@@ -258,6 +266,15 @@ export interface RemovedCommentResult {
   source?: ReviewNoteSource;
 }
 
+/** One live comment after an edit: same id, thread and anchor, with its new text. */
+export interface EditedCommentResult {
+  commentId: string;
+  summary: string;
+  rationale?: string;
+  author?: string;
+  updatedAt: string;
+}
+
 export interface ClearedCommentsResult {
   removedCount: number;
   remainingCommentCount: number;
@@ -350,6 +367,7 @@ export type HunkSessionCommandResult =
   | AppliedCommentBatchResult
   | NavigatedSelectionResult
   | RemovedCommentResult
+  | EditedCommentResult
   | ClearedCommentsResult
   | ReloadedSessionResult
   | HunkReviewResultV1
@@ -362,6 +380,7 @@ export type HunkSessionServerMessage =
   | SessionServerMessage<"navigate_to_hunk", NavigateToHunkToolInput>
   | SessionServerMessage<"reload_session", ReloadSessionToolInput>
   | SessionServerMessage<"remove_comment", RemoveCommentToolInput>
+  | SessionServerMessage<"edit_comment", EditCommentToolInput>
   | SessionServerMessage<"clear_comments", ClearCommentsToolInput>
   | SessionServerMessage<"read_review_resource", ReadReviewResourceToolInput>
   | SessionServerMessage<"apply_review_action", ApplyReviewActionToolInput>

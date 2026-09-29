@@ -1227,6 +1227,64 @@ describe("useTerminalReview", () => {
     }
   });
 
+  test("session edit replaces a live reply's text in place and refuses user notes", async () => {
+    const { controllerRef, setup } = await renderTerminalReview([createTwoHunkFile()]);
+
+    try {
+      await flush(setup);
+
+      await act(async () => {
+        const controller = expectValue(controllerRef.current);
+        controller.addLiveComment(
+          { filePath: "alpha.ts", hunkIndex: 0, summary: "Root agent note" },
+          "comment-1",
+        );
+      });
+      await flush(setup);
+      await act(async () => {
+        expectValue(controllerRef.current).addLiveComment(
+          { replyTo: "comment-1", summary: "Pondering…", author: "claude · on it" },
+          "comment-2",
+        );
+      });
+      await flush(setup);
+      const before = expectValue(
+        expectValue(controllerRef.current).liveCommentSummaries.find(
+          (c) => c.commentId === "comment-2",
+        ),
+      );
+
+      await act(async () => {
+        const result = expectValue(controllerRef.current).editLiveComment({
+          commentId: "comment-2",
+          summary: "Reading sops.go",
+        });
+        expect(result).toMatchObject({
+          commentId: "comment-2",
+          summary: "Reading sops.go",
+          author: "claude · on it",
+        });
+      });
+      await flush(setup);
+
+      const summaries = expectValue(controllerRef.current).liveCommentSummaries;
+      expect(summaries.map((c) => c.commentId)).toEqual(["comment-1", "comment-2"]);
+      expect(summaries[1]).toEqual({ ...before, summary: "Reading sops.go" });
+
+      await act(async () => {
+        const controller = expectValue(controllerRef.current);
+        expect(() => controller.editLiveComment({ commentId: "user:1", summary: "x" })).toThrow(
+          "only live comments take edits",
+        );
+        expect(() => controller.editLiveComment({ commentId: "comment-9", summary: "x" })).toThrow(
+          "No live comment matches id comment-9.",
+        );
+      });
+    } finally {
+      await act(async () => setup.renderer.destroy());
+    }
+  });
+
   test("session clear can include human user notes", async () => {
     const { controllerRef, setup } = await renderTerminalReview([createTwoHunkFile()]);
 

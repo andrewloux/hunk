@@ -25,6 +25,7 @@ import type {
   ClearedHighlightsResult,
   CommentBatchItemInput,
   CommentToolInput,
+  EditedCommentResult,
   HunkSessionCommandResult,
   HunkSessionServerMessage,
   NavigateToHunkToolInput,
@@ -70,6 +71,7 @@ const SUPPORTED_SESSION_ACTIONS: SessionDaemonAction[] = [
   "comment-apply",
   "comment-list",
   "comment-rm",
+  "comment-edit",
   "comment-clear",
   "highlight-add",
   "highlight-clear",
@@ -372,6 +374,7 @@ function sessionApiAuthorizationFacts(
     "comment-add": "comment",
     "comment-apply": "comment_batch",
     "comment-rm": "remove_comment",
+    "comment-edit": "edit_comment",
     "comment-clear": "clear_comments",
     "highlight-add": "highlight",
     "highlight-clear": "clear_highlights",
@@ -507,6 +510,22 @@ export async function handleSessionApiRequest(
               commentId: input.commentId,
             },
             timeoutMessage: "Timed out waiting for the session to remove the requested comment.",
+          }),
+        };
+        break;
+      case "comment-edit":
+        response = {
+          result: await state.dispatchCommand<EditedCommentResult, "edit_comment">({
+            selector: input.selector,
+            command: "edit_comment",
+            input: {
+              ...input.selector,
+              commentId: input.commentId,
+              summary: input.summary,
+              rationale: input.rationale,
+              author: input.author,
+            },
+            timeoutMessage: "Timed out waiting for the session to edit the requested comment.",
           }),
         };
         break;

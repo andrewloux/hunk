@@ -13,7 +13,7 @@ import type {
   HunkSessionState,
 } from "../types";
 import { HUNK_SESSION_DAEMON_VERSION } from "../protocol";
-import { cliInputSchema, hunkCommandResultSchemas } from "../protocolSchemas";
+import { cliInputSchema, hasCommentEdit, hunkCommandResultSchemas } from "../protocolSchemas";
 
 const selectorFields = {
   sessionId: z.string().min(1).max(128).optional(),
@@ -103,6 +103,15 @@ const commandInputs = {
     ...selectorFields,
     commentId: z.string().min(1).max(128),
   }),
+  edit_comment: z
+    .strictObject({
+      ...selectorFields,
+      commentId: z.string().min(1).max(128),
+      summary: z.string().min(1).max(4096).optional(),
+      rationale: optionalString,
+      author: optionalString,
+    })
+    .refine(hasCommentEdit, { message: "An edit must set a summary, rationale, or author." }),
   clear_comments: z.strictObject({
     ...selectorFields,
     filePath: optionalString,
@@ -180,6 +189,7 @@ const results = {
   navigate_to_hunk: hunkCommandResultSchemas.navigate_to_hunk,
   reload_session: hunkCommandResultSchemas.reload_session,
   remove_comment: hunkCommandResultSchemas.remove_comment,
+  edit_comment: hunkCommandResultSchemas.edit_comment,
   clear_comments: hunkCommandResultSchemas.clear_comments,
   read_review_resource: z.union([
     failure,

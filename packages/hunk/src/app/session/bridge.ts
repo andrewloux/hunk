@@ -9,6 +9,7 @@ import type {
   AppliedHighlightResult,
   ClearedCommentsResult,
   ClearedHighlightsResult,
+  EditedCommentResult,
   HunkSessionCommandResult,
   HunkSessionServerMessage,
   NavigatedSelectionResult,
@@ -48,6 +49,9 @@ export interface HunkSessionBridgeHandlers {
     options?: { resetApp?: boolean; sourcePath?: string },
   ) => Promise<ReloadedSessionResult>;
   removeLiveComment: (commentId: string) => RemovedCommentResult;
+  editLiveComment: (
+    input: Extract<HunkSessionServerMessage, { command: "edit_comment" }>["input"],
+  ) => EditedCommentResult;
   /**
    * The producer serving this session's review, when one is mounted.
    *
@@ -110,6 +114,8 @@ export function createHunkSessionBridge(handlers: HunkSessionBridgeHandlers) {
           });
         case "remove_comment":
           return handlers.removeLiveComment(message.input.commentId);
+        case "edit_comment":
+          return handlers.editLiveComment(message.input);
         case "clear_comments":
           return handlers.clearLiveComments(message.input.filePath, {
             includeUser: message.input.includeUser,

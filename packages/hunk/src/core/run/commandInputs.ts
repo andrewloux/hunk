@@ -298,6 +298,17 @@ export interface SessionCommentRemoveCommandInput {
   commentId: string;
 }
 
+export interface SessionCommentEditCommandInput {
+  kind: "session";
+  action: "comment-edit";
+  output: SessionCommandOutput;
+  selector: SessionSelectorInput;
+  commentId: string;
+  summary?: string;
+  rationale?: string;
+  author?: string;
+}
+
 export interface SessionCommentClearCommandInput {
   kind: "session";
   action: "comment-clear";
@@ -342,6 +353,7 @@ export type SessionCommandInput =
   | SessionCommentApplyCommandInput
   | SessionCommentListCommandInput
   | SessionCommentRemoveCommandInput
+  | SessionCommentEditCommandInput
   | SessionCommentClearCommandInput
   | SessionHighlightAddCommandInput
   | SessionHighlightClearCommandInput;

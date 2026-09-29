@@ -119,6 +119,11 @@ function createClient(overrides: Partial<HunkDaemonCliClient>): HunkDaemonCliCli
       removed: true,
       remainingCommentCount: 0,
     }),
+    editComment: async (input) => ({
+      commentId: input.commentId,
+      summary: input.summary ?? "",
+      updatedAt: "2026-09-29T00:00:00.000Z",
+    }),
     clearComments: async () => ({
       removedCount: 0,
       remainingCommentCount: 0,

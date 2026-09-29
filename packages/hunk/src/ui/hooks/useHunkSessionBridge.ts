@@ -28,6 +28,7 @@ export function useHunkSessionBridge({
   openAgentNotes,
   reloadSession,
   removeLiveComment,
+  editLiveComment,
   reviewNoteCount,
   reviewNoteSummaries,
   reviewProducer,
@@ -54,6 +55,7 @@ export function useHunkSessionBridge({
     options?: ReloadSessionOptions,
   ) => Promise<ReloadedSessionResult>;
   removeLiveComment: TerminalReview["removeLiveComment"];
+  editLiveComment: TerminalReview["editLiveComment"];
   reviewNoteCount: number;
   reviewNoteSummaries: SessionReviewNoteSummary[];
   /** The producer that answers brokered review resource reads and actions for this session. */
@@ -77,6 +79,7 @@ export function useHunkSessionBridge({
         openAgentNotes,
         reloadSession: (nextInput, options) => reloadSession(nextInput, { ...options }),
         removeLiveComment,
+        editLiveComment,
         reviewProducer,
       }),
     [
@@ -89,6 +92,7 @@ export function useHunkSessionBridge({
       openAgentNotes,
       reloadSession,
       removeLiveComment,
+      editLiveComment,
       reviewProducer,
     ],
   );

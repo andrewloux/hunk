@@ -427,6 +427,50 @@ describe("notes", () => {
     expect(removed.liveNotes.map((entry) => entry.note.id)).toEqual(["live-2"]);
   });
 
+  test("edits one live note's text in place and keeps its identity, thread and anchor", () => {
+    const added = reduceReviewState(createTestReviewState(), {
+      type: "notes/add-live",
+      notes: [
+        createTestStoredNote({ id: "live-1", fileKey: "alpha" }),
+        createTestStoredNote({
+          id: "live-2",
+          fileKey: "alpha",
+          parentId: "user:1",
+          summary: "Pondering…",
+          createdAt: "2026-09-29T00:00:00.000Z",
+        }),
+      ],
+    });
+    const edited = reduceReviewState(added, {
+      type: "notes/update-live",
+      noteId: "live-2",
+      edit: { summary: "Reading sops.go", updatedAt: "2026-09-29T00:00:05.000Z" },
+    });
+
+    const before = added.liveNotes[1]!;
+    const after = edited.liveNotes[1]!;
+    expect(edited.liveNotes.map((entry) => entry.note.id)).toEqual(["live-1", "live-2"]);
+    expect(after.note).toEqual({
+      ...before.note,
+      summary: "Reading sops.go",
+      updatedAt: "2026-09-29T00:00:05.000Z",
+    });
+    expect(after.resolution).toBe(before.resolution);
+    expect(edited.liveNotes[0]).toBe(added.liveNotes[0]);
+  });
+
+  test("ignores an edit of an unknown live note", () => {
+    const state = createTestReviewState();
+
+    expect(
+      reduceReviewState(state, {
+        type: "notes/update-live",
+        noteId: "nope",
+        edit: { summary: "x", updatedAt: "2026-09-29T00:00:00.000Z" },
+      }),
+    ).toBe(state);
+  });
+
   test("ignores removal of an unknown note", () => {
     const state = createTestReviewState();
 

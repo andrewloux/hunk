@@ -412,6 +412,27 @@ export const SESSION_AGENT_COMMANDS = {
     options: [repoOption, jsonOption],
     synopsis: [`hunk session comment rm ${SESSION_SELECTOR_SYNOPSIS} <comment-id> [--json]`],
   },
+  "comment-edit": {
+    name: "session comment edit",
+    summary: "replace the text of one live inline review note in place",
+    positionals: [
+      {
+        token: "[targets...]",
+        description: "<session-id> <comment-id>, or <comment-id> with --repo",
+      },
+    ],
+    options: [
+      repoOption,
+      { flag: "--summary <text>", description: "new short review note" },
+      { flag: "--rationale <text>", description: "new longer explanation" },
+      { flag: "--author <name>", description: "new author label" },
+      jsonOption,
+    ],
+    synopsis: [
+      `hunk session comment edit ${SESSION_SELECTOR_SYNOPSIS} <comment-id> [--summary <text>] [--rationale <text>] [--author <name>] [--json]`,
+    ],
+    examples: ['hunk session comment edit --repo . mcp:42 --summary "Reading sops.go"'],
+  },
   "comment-clear": {
     name: "session comment clear",
     summary: "clear inline review notes",

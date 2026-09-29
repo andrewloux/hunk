@@ -30,6 +30,12 @@ export type ReviewAction =
   | { type: "notes/set-visibility"; visible: boolean }
   | { type: "notes/add-live"; notes: readonly ReviewStoredNote[] }
   | { type: "notes/remove-live"; noteId: string }
+  /** Replace one live note's text in place; its id, thread, anchor and createdAt stay. */
+  | {
+      type: "notes/update-live";
+      noteId: string;
+      edit: { summary?: string; rationale?: string; author?: string; updatedAt: string };
+    }
   /** Clear mutable notes for one file, or for the whole review when no file is named. */
   | { type: "notes/clear"; fileKey?: string; includeUser?: boolean }
   | { type: "notes/remove-user"; noteId: string }

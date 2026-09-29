@@ -122,6 +122,7 @@ hunk session comment add (<session-id> | --repo <path>) (--reply-to <note-id> | 
 hunk session comment apply (<session-id> | --repo <path>) --stdin [--focus] [--json]
 hunk session comment list (<session-id> | --repo <path>) [--file <path>] [--type <live|all|ai|agent|user>] [--json]
 hunk session comment rm (<session-id> | --repo <path>) <comment-id> [--json]
+hunk session comment edit (<session-id> | --repo <path>) <comment-id> [--summary <text>] [--rationale <text>] [--author <name>] [--json]
 hunk session comment clear (<session-id> | --repo <path>) [--file <path>] [--include-user|--all] --yes [--json]
 ```
 

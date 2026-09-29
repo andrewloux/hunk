@@ -416,6 +416,41 @@ describe("handleSessionApiRequest", () => {
     expect(calls.filter((c) => c.method === "dispatchCommand")).toHaveLength(4);
   });
 
+  test("forwards comment-edit to the edit_comment command with its fields", async () => {
+    const { state, calls } = createFakeState();
+    const response = await handleSessionApiRequest(
+      state,
+      apiRequest({
+        action: "comment-edit",
+        selector: { sessionId: "s-1" },
+        commentId: "mcp:7",
+        summary: "Reading sops.go",
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const dispatched = calls
+      .filter((call) => call.method === "dispatchCommand")
+      .map((call) => call.args[0]);
+    expect(dispatched).toMatchObject([
+      { command: "edit_comment", input: { commentId: "mcp:7", summary: "Reading sops.go" } },
+    ]);
+  });
+
+  test("refuses a comment-edit that sets no field", async () => {
+    const { state, calls } = createFakeState();
+    const response = await handleSessionApiRequest(
+      state,
+      apiRequest({
+        action: "comment-edit",
+        selector: { sessionId: "s-1" },
+        commentId: "mcp:7",
+      } as SessionDaemonRequest),
+    );
+    expect(response.status).toBe(400);
+    expect(calls.filter((c) => c.method === "dispatchCommand")).toHaveLength(0);
+  });
+
   test("forwards reply targets through single and batched comment dispatch", async () => {
     const { state, calls } = createFakeState();
     const requests: SessionDaemonRequest[] = [

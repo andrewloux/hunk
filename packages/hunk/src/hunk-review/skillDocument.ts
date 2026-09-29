@@ -147,6 +147,7 @@ const COMMENTS_SECTION = [
       commands["comment-apply"],
       commands["comment-list"],
       commands["comment-rm"],
+      commands["comment-edit"],
       commands["comment-clear"],
     ),
   ),

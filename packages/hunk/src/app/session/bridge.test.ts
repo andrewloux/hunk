@@ -45,6 +45,11 @@ function createHandlers() {
       removed: true,
       remainingCommentCount: 0,
     })),
+    editLiveComment: mock((input: { commentId: string; summary?: string }) => ({
+      commentId: input.commentId,
+      summary: input.summary ?? "",
+      updatedAt: "2026-09-29T00:00:00.000Z",
+    })),
     addAgentLineHighlight: mock((input) => ({
       fileId: "file-1",
       filePath: input.filePath,
@@ -116,6 +121,26 @@ describe("createHunkSessionBridge", () => {
     );
     expect(handlers.addLiveCommentBatch).toHaveBeenCalledTimes(1);
     expect(handlers.openAgentNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("routes comment edits to the edit handler with the whole input", async () => {
+    const handlers = createHandlers();
+    const bridge = createHunkSessionBridge(handlers);
+
+    const result = await bridge.dispatchCommand({
+      type: "command",
+      requestId: "edit-1",
+      command: "edit_comment",
+      input: { sessionId: "session-1", commentId: "mcp:7", summary: "Reading sops.go" },
+    });
+
+    expect(result).toMatchObject({ commentId: "mcp:7", summary: "Reading sops.go" });
+    expect(handlers.editLiveComment).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      commentId: "mcp:7",
+      summary: "Reading sops.go",
+    });
+    expect(handlers.removeLiveComment).not.toHaveBeenCalled();
   });
 
   test("routes navigate, reload, remove, and clear commands through their dedicated handlers", async () => {

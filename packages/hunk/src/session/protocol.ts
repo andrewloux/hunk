@@ -2,6 +2,7 @@ import type {
   SessionCommentAddCommandInput,
   SessionCommentApplyCommandInput,
   SessionCommentClearCommandInput,
+  SessionCommentEditCommandInput,
   SessionCommentListCommandInput,
   SessionCommentRemoveCommandInput,
   SessionHighlightAddCommandInput,
@@ -17,6 +18,7 @@ import type {
   AppliedHighlightResult,
   ClearedCommentsResult,
   ClearedHighlightsResult,
+  EditedCommentResult,
   ListedSession,
   NavigatedSelectionResult,
   ReloadedSessionResult,
@@ -35,8 +37,12 @@ export const HUNK_SESSION_API_VERSION = 1;
  * Version daemon/session compatibility separately from the HTTP action surface so newer Hunk
  * builds can refresh an older daemon even when it still exposes the same API endpoints. Bump this
  * when daemon-forwarded payloads change, even if the supported action names stay stable.
+ *
+ * The andrewloux/hunk fork numbers its daemons 1000000 + the upstream version they build on, so a
+ * fork build and an upstream build always see each other as incompatible. The fork adds
+ * `comment-edit`.
  */
-export const HUNK_SESSION_DAEMON_VERSION = 15;
+export const HUNK_SESSION_DAEMON_VERSION = 1000015;
 
 export type SessionDaemonAction =
   | "list"
@@ -49,6 +55,7 @@ export type SessionDaemonAction =
   | "comment-apply"
   | "comment-list"
   | "comment-rm"
+  | "comment-edit"
   | "comment-clear"
   | "highlight-add"
   | "highlight-clear";
@@ -134,6 +141,14 @@ export type SessionDaemonRequest =
       commentId: string;
     }
   | {
+      action: "comment-edit";
+      selector: SessionCommentEditCommandInput["selector"];
+      commentId: string;
+      summary?: string;
+      rationale?: string;
+      author?: string;
+    }
+  | {
       action: "comment-clear";
       selector: SessionCommentClearCommandInput["selector"];
       filePath?: string;
@@ -167,6 +182,7 @@ export interface SessionDaemonResponses {
   "comment-apply": { result: AppliedCommentBatchResult };
   "comment-list": { comments: Array<SessionLiveCommentSummary | SessionReviewNoteSummary> };
   "comment-rm": { result: RemovedCommentResult };
+  "comment-edit": { result: EditedCommentResult };
   "comment-clear": { result: ClearedCommentsResult };
   "highlight-add": { result: AppliedHighlightResult };
   "highlight-clear": { result: ClearedHighlightsResult };

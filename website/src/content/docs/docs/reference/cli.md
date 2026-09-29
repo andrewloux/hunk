@@ -515,6 +515,30 @@ hunk session comment rm (<session-id> | --repo <path>) <comment-id> [--json]
 
 **Positionals:** `[targets...]` — &lt;session-id&gt; &lt;comment-id&gt;, or &lt;comment-id&gt; with --repo.
 
+### `hunk session comment edit`
+
+replace the text of one live inline review note in place
+
+```bash
+hunk session comment edit (<session-id> | --repo <path>) <comment-id> [--summary <text>] [--rationale <text>] [--author <name>] [--json]
+```
+
+| Option               | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| `--repo <path>`      | target the live session whose repo root matches this path |
+| `--summary <text>`   | new short review note                                     |
+| `--rationale <text>` | new longer explanation                                    |
+| `--author <name>`    | new author label                                          |
+| `--json`             | emit structured JSON                                      |
+
+**Positionals:** `[targets...]` — &lt;session-id&gt; &lt;comment-id&gt;, or &lt;comment-id&gt; with --repo.
+
+**Examples:**
+
+```bash
+hunk session comment edit --repo . mcp:42 --summary "Reading sops.go"
+```
+
 ### `hunk session comment clear`
 
 clear inline review notes

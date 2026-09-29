@@ -1357,6 +1357,36 @@ describe("parseCli", () => {
     });
   });
 
+  test("parses session comment edit with only the fields it sets", async () => {
+    const parsed = await parseCli([
+      "bun",
+      "hunk",
+      "session",
+      "comment",
+      "edit",
+      "session-1",
+      "mcp:7",
+      "--summary",
+      "Reading sops.go",
+      "--json",
+    ]);
+
+    expect(parsed).toEqual({
+      kind: "session",
+      action: "comment-edit",
+      selector: { sessionId: "session-1" },
+      commentId: "mcp:7",
+      summary: "Reading sops.go",
+      output: "json",
+    });
+  });
+
+  test("rejects session comment edit without a field to set", async () => {
+    await expect(
+      parseCli(["bun", "hunk", "session", "comment", "edit", "session-1", "mcp:7"]),
+    ).rejects.toThrow("Pass at least one of --summary, --rationale, or --author.");
+  });
+
   test("parses session comment clear", async () => {
     const parsed = await parseCli([
       "bun",
@@ -2077,7 +2107,7 @@ describe("parseCli argument validation", () => {
     );
     await expect(
       parseCli(["bun", "hunk", "session", "comment", "bogus", "session-1"]),
-    ).rejects.toThrow("Supported comment subcommands are add, apply, list, rm, and clear.");
+    ).rejects.toThrow("Supported comment subcommands are add, apply, list, rm, edit, and clear.");
   });
 
   test("rejects a comment-add target that is not exactly one of --old-line or --new-line", async () => {

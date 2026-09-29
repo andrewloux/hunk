@@ -29,6 +29,7 @@ import type {
   AppliedHighlightResult,
   ClearedCommentsResult,
   ClearedHighlightsResult,
+  EditedCommentResult,
   ListedSession,
   NavigatedSelectionResult,
   ReloadedSessionResult,
@@ -42,6 +43,7 @@ import type {
   SessionCommentAddCommandInput,
   SessionCommentApplyCommandInput,
   SessionCommentClearCommandInput,
+  SessionCommentEditCommandInput,
   SessionCommentListCommandInput,
   SessionCommentRemoveCommandInput,
   SessionHighlightAddCommandInput,
@@ -67,6 +69,7 @@ export interface HunkSessionCliClient {
     input: SessionCommentListCommandInput,
   ): Promise<Array<SessionLiveCommentSummary | SessionReviewNoteSummary>>;
   removeComment(input: SessionCommentRemoveCommandInput): Promise<RemovedCommentResult>;
+  editComment(input: SessionCommentEditCommandInput): Promise<EditedCommentResult>;
   clearComments(input: SessionCommentClearCommandInput): Promise<ClearedCommentsResult>;
   addHighlight(input: SessionHighlightAddCommandInput): Promise<AppliedHighlightResult>;
   clearHighlights(input: SessionHighlightClearCommandInput): Promise<ClearedHighlightsResult>;
@@ -262,6 +265,19 @@ class HttpHunkSessionCliClient implements HunkSessionCliClient {
         action: "comment-rm",
         selector: input.selector,
         commentId: input.commentId,
+      })
+    ).result;
+  }
+
+  async editComment(input: SessionCommentEditCommandInput) {
+    return (
+      await this.request({
+        action: "comment-edit",
+        selector: input.selector,
+        commentId: input.commentId,
+        summary: input.summary,
+        rationale: input.rationale,
+        author: input.author,
       })
     ).result;
   }
@@ -593,6 +609,13 @@ export function formatRemoveCommentOutput(
 ) {
   const label = result.source === "user" ? "user note" : "live comment";
   return `Removed ${label} ${result.commentId} from ${formatSessionSelector(selector)}. Remaining comments: ${result.remainingCommentCount}.\n`;
+}
+
+export function formatEditCommentOutput(
+  selector: SessionSelectorInput,
+  result: EditedCommentResult,
+) {
+  return `Edited live comment ${result.commentId} in ${formatSessionSelector(selector)}.\n`;
 }
 
 export function formatNoteListOutput(

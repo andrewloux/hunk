@@ -35,7 +35,7 @@ describe("Hunk session broker credential store", () => {
     expect(second.caller.grant.keyId).toBe(first.caller.grant.keyId);
     expect(first.producer.grant.keyId).not.toBe(first.caller.grant.keyId);
 
-    const securityDir = join(env.XDG_RUNTIME_DIR!, "hunk-mcp", "security-v1");
+    const securityDir = join(env.XDG_RUNTIME_DIR!, "hunk-mcp", "security-fork-v1");
     if (process.platform !== "win32") {
       expect(lstatSync(securityDir).mode & 0o777).toBe(0o700);
       for (const name of ["daemon.json", "producer.json", "caller.json"]) {
@@ -59,7 +59,7 @@ describe("Hunk session broker credential store", () => {
   test("rejects malformed and overly permissive credential files without leaking private bytes", async () => {
     const env = isolatedEnv();
     await loadOrCreateHunkSessionBrokerCredentials({ env });
-    const callerPath = join(env.XDG_RUNTIME_DIR!, "hunk-mcp", "security-v1", "caller.json");
+    const callerPath = join(env.XDG_RUNTIME_DIR!, "hunk-mcp", "security-fork-v1", "caller.json");
     const secret = "private-secret-sentinel";
     writeFileSync(callerPath, `{"privateKey":"${secret}"}`);
     if (process.platform !== "win32") chmodSync(callerPath, 0o644);
@@ -82,7 +82,7 @@ describe("Hunk session broker credential store", () => {
     const { mkdirSync } = await import("node:fs");
     mkdirSync(runtimeDir, { mode: 0o700 });
     mkdirSync(target, { mode: 0o700 });
-    symlinkSync(target, join(runtimeDir, "security-v1"), "dir");
+    symlinkSync(target, join(runtimeDir, "security-fork-v1"), "dir");
 
     await expect(loadOrCreateHunkSessionBrokerCredentials({ env })).rejects.toThrow(
       "unsafe or malformed",

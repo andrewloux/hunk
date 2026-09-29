@@ -37,6 +37,7 @@ const HUNK_COMMAND_SCOPES = [
   "comment",
   "comment_batch",
   "remove_comment",
+  "edit_comment",
   "clear_comments",
   "highlight",
   "clear_highlights",
@@ -334,7 +335,9 @@ export async function loadOrCreateHunkSessionBrokerCredentials(
   const randomBytes =
     options.randomBytes ?? ((length) => crypto.getRandomValues(new Uint8Array(length)));
   const runtimeDir = resolveSessionBrokerRuntimePaths(undefined, env).runtimeDir;
-  const securityDir = join(runtimeDir, "security-v1");
+  // The fork's caller grant carries `edit_comment`, which upstream's `security-v1` files lack,
+  // so fork builds keep their keys in their own directory.
+  const securityDir = join(runtimeDir, "security-fork-v1");
   ensureRuntimeNamespace(runtimeDir);
   ensureSecurityDirectory(securityDir);
   const now = (options.now ?? Date.now)();

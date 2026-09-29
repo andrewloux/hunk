@@ -41,6 +41,7 @@ const sessionDaemonActionSchema = z.enum([
   "comment-apply",
   "comment-list",
   "comment-rm",
+  "comment-edit",
   "comment-clear",
   "highlight-add",
   "highlight-clear",
@@ -162,6 +163,11 @@ function hasValidCommentTarget(input: {
   return input.hunkNumber !== undefined || (input.side !== undefined && input.line !== undefined);
 }
 
+/** Require a comment edit to set at least one field. */
+export function hasCommentEdit(input: { summary?: string; rationale?: string; author?: string }) {
+  return input.summary !== undefined || input.rationale !== undefined || input.author !== undefined;
+}
+
 const commentApplyItemSchema = z
   .strictObject({
     filePath: z.string().optional(),
@@ -238,6 +244,16 @@ export const sessionDaemonRequestSchema = z.discriminatedUnion("action", [
     selector: selectorSchema,
     commentId: z.string(),
   }),
+  z
+    .strictObject({
+      action: z.literal("comment-edit"),
+      selector: selectorSchema,
+      commentId: z.string().min(1),
+      summary: z.string().min(1).optional(),
+      rationale: z.string().optional(),
+      author: z.string().optional(),
+    })
+    .refine(hasCommentEdit, { message: "An edit must set a summary, rationale, or author." }),
   z.strictObject({
     action: z.literal("comment-clear"),
     selector: selectorSchema,
@@ -436,6 +452,13 @@ export const hunkCommandResultSchemas = {
     remainingCommentCount: nonnegative,
     source: z.enum(["ai", "agent", "user"]).optional(),
   }),
+  edit_comment: z.strictObject({
+    commentId: z.string(),
+    summary: z.string(),
+    rationale: z.string().optional(),
+    author: z.string().optional(),
+    updatedAt: z.string(),
+  }),
   clear_comments: z.strictObject({
     removedCount: nonnegative,
     remainingCommentCount: nonnegative,
@@ -483,6 +506,9 @@ const daemonResponseSchemas = {
   }),
   "comment-rm": z.strictObject({
     result: hunkCommandResultSchemas.remove_comment,
+  }),
+  "comment-edit": z.strictObject({
+    result: hunkCommandResultSchemas.edit_comment,
   }),
   "comment-clear": z.strictObject({
     result: hunkCommandResultSchemas.clear_comments,

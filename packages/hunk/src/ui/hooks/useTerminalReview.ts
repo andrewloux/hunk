@@ -70,6 +70,8 @@ import type {
   ClearedHighlightsResult,
   CommentBatchItemInput,
   CommentToolInput,
+  EditCommentToolInput,
+  EditedCommentResult,
   HighlightToolInput,
   LiveComment,
   NavigateToHunkToolInput,
@@ -270,6 +272,7 @@ export interface TerminalReview {
   ) => ClearedCommentsResult;
   navigateToLocation: (input: NavigateToHunkToolInput) => NavigatedSelectionResult;
   removeLiveComment: (commentId: string) => RemovedCommentResult;
+  editLiveComment: (input: EditCommentToolInput) => EditedCommentResult;
   /** Agent attention marks per file id, painted through the extension line-highlight pipeline. */
   agentLineHighlightsByFileId: ReadonlyMap<string, readonly ValidatedLineHighlight[]>;
   addAgentLineHighlight: (input: HighlightToolInput) => AppliedHighlightResult;
@@ -1441,6 +1444,39 @@ export function useTerminalReview({
     [runIntent, store],
   );
 
+  /** Replace one live comment's text in place, keeping its id, thread and anchor. */
+  const editLiveComment = useCallback(
+    (input: EditCommentToolInput): EditedCommentResult => {
+      if (input.commentId.startsWith("user:")) {
+        throw new Error(
+          `Comment ${input.commentId} is a user note; only live comments take edits.`,
+        );
+      }
+      const current = store
+        .getSnapshot()
+        .liveNotes.find((entry) => entry.note.id === input.commentId);
+      if (!current) {
+        throw new Error(`No live comment matches id ${input.commentId}.`);
+      }
+      const edit = {
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.rationale !== undefined ? { rationale: input.rationale } : {}),
+        ...(input.author !== undefined ? { author: input.author } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      store.dispatch({ type: "notes/update-live", noteId: input.commentId, edit });
+      const note = { ...current.note, ...edit };
+      return {
+        commentId: input.commentId,
+        summary: note.summary,
+        ...(note.rationale !== undefined ? { rationale: note.rationale } : {}),
+        ...(note.author !== undefined ? { author: note.author } : {}),
+        updatedAt: edit.updatedAt,
+      };
+    },
+    [store],
+  );
+
   /** Clear live comments, optionally including human notes, globally or for one file. */
   const clearLiveComments = useCallback(
     (filePath?: string, options: { includeUser?: boolean } = {}): ClearedCommentsResult => {
@@ -1759,6 +1795,7 @@ export function useTerminalReview({
     moveSelection,
     navigateToLocation,
     removeLiveComment,
+    editLiveComment,
     removeUserNote,
     revealLine,
     saveDraftNote,
